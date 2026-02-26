@@ -1,36 +1,30 @@
-import dotenv from 'dotenv';
-dotenv.config();
-
 import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { JWT } from 'google-auth-library';
+import dotenv from 'dotenv';
+dotenv.config();
+console.log('[v0] Sheets.js loading...');
+console.log('[v0] GOOGLE_SHEETS_CLIENT_EMAIL:', process.env.GOOGLE_SHEETS_CLIENT_EMAIL ? 'SET' : 'MISSING');
+console.log('[v0] GOOGLE_SHEETS_PRIVATE_KEY:', process.env.GOOGLE_SHEETS_PRIVATE_KEY ? 'SET' : 'MISSING');
+console.log('[v0] GOOGLE_SHEETS_SPREADSHEET_ID:', process.env.GOOGLE_SHEETS_SPREADSHEET_ID ? 'SET' : 'MISSING');
 
-console.log('[Sheets] Initializing...');
-
-function createAuthClient() {
-  const formattedKey = process.env.GOOGLE_SHEETS_PRIVATE_KEY.replace(/\\n/g, '\n');
-
-  if (!formattedKey.startsWith('-----BEGIN PRIVATE KEY-----')) {
-    throw new Error(
-      'Private key format invalid. Must start with -----BEGIN PRIVATE KEY-----'
-    );
-  }
-
-  return new JWT({
-    email: process.env.GOOGLE_SHEETS_CLIENT_EMAIL,
-    key: formattedKey,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
-}
+const serviceAccountAuth = new JWT({
+  email: process.env.GOOGLE_SHEETS_CLIENT_EMAIL,
+  key: process.env.GOOGLE_SHEETS_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+  scopes: [
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/drive.file',
+  ],
+});
 
 export async function getSheets() {
-  const auth = createAuthClient();
-
-  const doc = new GoogleSpreadsheet(
-    process.env.GOOGLE_SHEETS_SPREADSHEET_ID,
-    auth
-  );
-
+  console.log('[v0] getSheets - Getting spreadsheet with ID:', process.env.GOOGLE_SHEETS_SPREADSHEET_ID);
+  console.log('[v0] getSheets - Auth email:', process.env.GOOGLE_SHEETS_CLIENT_EMAIL);
+  
+  const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEETS_SPREADSHEET_ID, serviceAccountAuth);
+  console.log('[v0] getSheets - Created GoogleSpreadsheet instance');
+  
   await doc.loadInfo();
+  console.log('[v0] getSheets - Spreadsheet info loaded successfully');
   return doc;
 }
 
@@ -49,8 +43,8 @@ export async function getAllRows(sheet) {
     const rows = await sheet.getRows();
     return rows.map(row => row.toObject());
   } catch (error) {
-    console.error('[Sheets] Error fetching rows:', error);
-    throw error;
+    console.error('Error fetching rows:', error);
+    return [];
   }
 }
 
@@ -59,7 +53,7 @@ export async function addRow(sheet, data) {
     const row = await sheet.addRow(data);
     return row.toObject();
   } catch (error) {
-    console.error('[Sheets] Error adding row:', error);
+    console.error('Error adding row:', error);
     throw error;
   }
 }
@@ -68,17 +62,16 @@ export async function updateRow(sheet, rowIndex, data) {
   try {
     const rows = await sheet.getRows();
     const row = rows[rowIndex];
-
     if (!row) throw new Error('Row not found');
-
+    
     Object.keys(data).forEach(key => {
       row[key] = data[key];
     });
-
+    
     await row.save();
     return row.toObject();
   } catch (error) {
-    console.error('[Sheets] Error updating row:', error);
+    console.error('Error updating row:', error);
     throw error;
   }
 }
@@ -87,13 +80,12 @@ export async function deleteRow(sheet, rowIndex) {
   try {
     const rows = await sheet.getRows();
     const row = rows[rowIndex];
-
     if (!row) throw new Error('Row not found');
-
+    
     await row.delete();
     return true;
   } catch (error) {
-    console.error('[Sheets] Error deleting row:', error);
+    console.error('Error deleting row:', error);
     throw error;
   }
 }
